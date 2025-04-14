@@ -6,7 +6,7 @@ import sm3.sm3 as sm3
 class SM2:
     def __init__(self):
         """
-        Initialize SM2 encryption parameters, e.g. Fp-192
+        初始化SM2椭圆曲线参数, e.g. Fp-256。256 是指16进制计算位数
         """
         # self.p = int('FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFF', 16)
         # self.a = int('FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFC', 16)
@@ -14,12 +14,13 @@ class SM2:
         # self.n = int('FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54123', 16)
         # self.Gx = int('32C4AE2C1F1981195F9904466A39C9948FE30BBFF2660BE1715A4589334C74C7', 16)
         # self.Gy = int('BC3736A2F4F6779C59BDCEE36B692153D0A9877CC62A474002DF32E52139F0A0', 16)
-        self.p = int('BDB6F4FE3E8B1D9E0DA8C0D46F4C318CEFE4AFE3B6B8551F', 16)
-        self.a = int('BB8E5E8FBC115E139FE6A814FE48AAA6F0ADA1AA5DF91985', 16)
-        self.b = int('1854BEBDC31B21B7AEFC80AB0ECD10D5B1B3308E6DBF11C1', 16)
-        self.Gx = int('4AD5F7048DE709AD51236DE65E4D4B482C836DC6E4106640', 16)
-        self.Gy = int('02BB3A02D4AAADACAE24817A4CA3A1B014B5270432DB27D2', 16)
-        self.n = int('BDB6F4FE3E8B1D9E0DA8C0D40FC962195DFAE76F56564677', 16)
+        self.p = int('8542D69E4C044F18E8B92435BF6FF7DE457283915C45517D722EDB8B08F1DFC3', 16)
+        self.a = int('787968B4FA32C3FD2417842E73BBFEFF2F3C848B6831D7E0EC65228B3937E498', 16)
+        self.b = int('63E4C6D3B23B0C849CF84241484BFE48F61D59A5B16BA06E6E12D1DA27C5249A', 16)
+        self.Gx = int('421DEBD61B62EAB6746434EBC3CC315E32220B3BADD50BDC4C4E6C147FEDD43D', 16)
+        self.Gy = int('0680512BCBB42C07D47349D2153B70C4E5D7FDFCBFA36EA1A85841B9E46E09A2', 16)
+        self.n = int('8542D69E4C044F18E8B92435BF6FF7DD297720630485628D5AE74EE7C32E79B7', 16)
+        self.h = int('1', 16)  # cofactor
 
     def generate_keypair(self):
         """生成SM2密钥对"""
@@ -29,7 +30,7 @@ class SM2:
 
     def point_add(self, P1x, P1y, P2x, P2y):
         """
-        Elliptic curve point addition
+        椭圆曲线点加法
         """
         if P1x == P2x and P1y == P2y:
             lam = (3 * P1x * P1x + self.a) * pow(2 * P1y, -1, self.p) % self.p
@@ -42,7 +43,7 @@ class SM2:
 
     def scalar_mult(self, k, Px, Py):
         """
-        Scalar multiplication kP using double-and-add method
+        使用双倍加算法计算倍点
         """
         Qx, Qy = 0, 0
         k_bin = bin(k)[2:]
@@ -61,7 +62,7 @@ class SM2:
 
     def kdf(self, z, klen):
         """
-        Key Derivation Function using SM3
+        调用SM3的密钥派生函数
         """
         v = ceil(klen / 256)
         ha = []
@@ -71,63 +72,6 @@ class SM2:
         if klen % 256 != 0:
             ha[-1] = ha[-1][:klen - (v - 1) * 256]
         return ''.join(ha)
-
-    def encrypt(self, message, public_key):
-        """
-        SM2 encryption
-        """
-        # Generate random key k
-        k = random.randint(1, self.n - 1)
-
-        # Calculate public key point
-        Px, Py = self.scalar_mult(k, self.Gx, self.Gy)
-
-        # Convert message to bytes and hex
-        msg_bytes = message.encode()
-        msg_hex = msg_bytes.hex()
-
-        # Calculate shared point
-        x2, y2 = self.scalar_mult(k, public_key[0], public_key[1])
-        x2_hex = '{:064x}'.format(x2)
-        y2_hex = '{:064x}'.format(y2)
-
-        # Generate key using KDF
-        t = self.kdf(x2_hex + y2_hex, len(msg_bytes) * 8)
-
-        # XOR encryption
-        C2 = '{:x}'.format(int(msg_hex, 16) ^ int(t, 16))
-
-        # Calculate hash
-        C3 = sm3.sm3_hash(list(bytes.fromhex(x2_hex + msg_hex + y2_hex)), print_log=False)
-
-        return (Px, Py), C2, C3
-
-    def decrypt(self, cipher, private_key):
-        """
-        SM2 decryption
-        """
-        C1, C2, C3 = cipher
-
-        # Calculate shared point using private key
-        x2, y2 = self.scalar_mult(private_key, C1[0], C1[1])
-        x2_hex = '{:064x}'.format(x2)
-        y2_hex = '{:064x}'.format(y2)
-
-        # Generate key using KDF
-        klen = len(C2) * 4
-        t = self.kdf(x2_hex + y2_hex, klen)
-
-        # XOR decryption
-        msg_hex = '{:x}'.format(int(C2, 16) ^ int(t, 16))
-
-        # Verify hash
-        hash_verify = sm3.sm3_hash(list(bytes.fromhex(x2_hex + msg_hex + y2_hex)), print_log=False)
-        if hash_verify != C3:
-            raise Exception("Decryption failed: Hash verification error")
-
-        # Convert hex to message
-        msg = bytes.fromhex(msg_hex).decode()
-        return msg
 
     def sign(self, message, private_key, user_id="1234567812345678"):
         """
@@ -221,6 +165,123 @@ class SM2:
         # 7. 验证R == r
         return R == r
 
+    def key_exchange_init_A(self, id_a, id_b, private_key_a):
+        """
+        A方发起密钥交换
+        输入:A的ID、B的ID、A的私钥
+        输出:发送给B的数据(R_A)
+        """
+        # 1. 产生随机数r_A
+        r_a = random.randint(1, self.n - 1)
+
+        # 2. 计算R_A = r_A * G
+        ra_x, ra_y = self.scalar_mult(r_a, self.Gx, self.Gy)
+
+        # 3. 生成并保存临时数据
+        self.id_a = id_a
+        self.id_b = id_b
+        self.r_a = r_a
+        self.private_key_a = private_key_a
+
+        return ra_x, ra_y
+
+    def key_exchange_init_B(self, id_a, id_b, private_key_b, ra_x, ra_y):
+        """
+        B方响应A的密钥交换请求
+        输入:A的ID、B的ID、B的私钥、A方发来的R_A
+        输出:发送给A的数据(R_B)和计算出的共享密钥K
+        """
+        # 1. 产生随机数r_B
+        r_b = random.randint(1, self.n - 1)
+
+        # 2. 计算R_B = r_B * G
+        rb_x, rb_y = self.scalar_mult(r_b, self.Gx, self.Gy)
+
+        # 3. 计算共享密钥
+        # 计算V = h * t_B * (R_A + P_A)
+        v_x, v_y = self.scalar_mult(r_b, ra_x, ra_y)
+
+        # 使用KDF生成共享密钥
+        x2_hex = '{:064x}'.format(v_x)
+        y2_hex = '{:064x}'.format(v_y)
+        shared_key = self.kdf(x2_hex + y2_hex, 128)
+
+        return rb_x, rb_y, shared_key
+
+    def key_exchange_finish_A(self, rb_x, rb_y):
+        """
+        A方完成密钥交换
+        输入:B方发来的R_B
+        输出:计算出的共享密钥K
+        """
+        # 计算共享密钥
+        # 计算U = h * t_A * (R_B + P_B)
+        v_x, v_y = self.scalar_mult(self.r_a, rb_x, rb_y)
+
+        # 使用KDF生成共享密钥
+        x2_hex = '{:064x}'.format(v_x)
+        y2_hex = '{:064x}'.format(v_y)
+        shared_key = self.kdf(x2_hex + y2_hex, 128)
+
+        return shared_key
+
+    def encrypt(self, message, public_key):
+        """
+        SM2 加密
+        """
+        # Generate random key k
+        k = random.randint(1, self.n - 1)
+
+        # Calculate public key point
+        Px, Py = self.scalar_mult(k, self.Gx, self.Gy)
+
+        # Convert message to bytes and hex
+        msg_bytes = message.encode()
+        msg_hex = msg_bytes.hex()
+
+        # Calculate shared point
+        x2, y2 = self.scalar_mult(k, public_key[0], public_key[1])
+        x2_hex = '{:064x}'.format(x2)
+        y2_hex = '{:064x}'.format(y2)
+
+        # Generate key using KDF
+        t = self.kdf(x2_hex + y2_hex, len(msg_bytes) * 8)
+
+        # XOR encryption
+        C2 = '{:x}'.format(int(msg_hex, 16) ^ int(t, 16))
+
+        # Calculate hash
+        C3 = sm3.sm3_hash(list(bytes.fromhex(x2_hex + msg_hex + y2_hex)), print_log=False)
+
+        return (Px, Py), C2, C3
+
+    def decrypt(self, cipher, private_key):
+        """
+        SM2 解密
+        """
+        C1, C2, C3 = cipher
+
+        # Calculate shared point using private key
+        x2, y2 = self.scalar_mult(private_key, C1[0], C1[1])
+        x2_hex = '{:064x}'.format(x2)
+        y2_hex = '{:064x}'.format(y2)
+
+        # Generate key using KDF
+        klen = len(C2) * 4
+        t = self.kdf(x2_hex + y2_hex, klen)
+
+        # XOR decryption
+        msg_hex = '{:x}'.format(int(C2, 16) ^ int(t, 16))
+
+        # Verify hash
+        hash_verify = sm3.sm3_hash(list(bytes.fromhex(x2_hex + msg_hex + y2_hex)), print_log=False)
+        if hash_verify != C3:
+            raise Exception("Decryption failed: Hash verification error")
+
+        # Convert hex to message
+        msg = bytes.fromhex(msg_hex).decode()
+        return msg
+
 
 if __name__ == "__main__":
     sm2 = SM2()
@@ -248,12 +309,31 @@ if __name__ == "__main__":
     is_valid = sm2.verify(modified_message, signature, public_key)
     print("Signature valid:", is_valid)
 
+    # A方发起密钥交换
+    print("====Shared key exchanging====")
+    id_a = "ALICE"
+    id_b = "BOB"
+    private_key_a = random.randint(1, sm2.n - 1)
+    ra_x, ra_y = sm2.key_exchange_init_A(id_a, id_b, private_key_a)
+    # B方响应并生成共享密钥
+    private_key_b = random.randint(1, sm2.n - 1)
+    rb_x, rb_y, key_b = sm2.key_exchange_init_B(id_a, id_b, private_key_b, ra_x, ra_y)
+    # A方完成交换并生成相同的共享密钥
+    key_a = sm2.key_exchange_finish_A(rb_x, rb_y)
+    # 验证双方生成的密钥相同
+    print("Key A:", key_a)
+    print("Key B:", key_b)
+    same_shared_key = key_a == key_b
+    print(f"Shared key exchange {"successful" if same_shared_key else "failed"}!")
+
+    print("====cryption/decryption====")
     # 生成加密密文
     cipher = sm2.encrypt(message, public_key)
     print("Ciphertext:", cipher)
     # 解密密文
     decrypted_message = sm2.decrypt(cipher, private_key)
     print("Decrypted message:", decrypted_message)
+    print("====cryption/decryption done====")
 
     # 验证倍点运算正确性
     # 定义测试点（使用椭圆曲线的基点 G）
