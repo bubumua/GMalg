@@ -295,6 +295,7 @@ if __name__ == "__main__":
     # 定义明文消息
     message = "Hello, SM2!"
     print("Message:", message)
+
     # 签名消息
     signature = sm2.sign(message, private_key)
     signature_hex = '{:048x},{:048x}'.format(signature[0], signature[1])
@@ -309,8 +310,8 @@ if __name__ == "__main__":
     is_valid = sm2.verify(modified_message, signature, public_key)
     print("Signature valid:", is_valid)
 
-    # A方发起密钥交换
     print("====Shared key exchanging====")
+    # A方发起密钥交换
     id_a = "ALICE"
     id_b = "BOB"
     private_key_a = random.randint(1, sm2.n - 1)
