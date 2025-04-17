@@ -1,5 +1,5 @@
-# SM4 Encryption Algorithm Implementation
-# Reference: GM/T 0002-2012 SM4 block cipher algorithm
+# SM4 分组算法实现
+# 参考: GM/T 32907-2016 SM4分组加密算法
 
 # S盒
 SBOX = [
